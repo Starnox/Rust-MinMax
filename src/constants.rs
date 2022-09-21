@@ -3,7 +3,11 @@ use bevy::prelude::Color;
 pub const DEFAULT_BOARD_SIZE: u32 = 3;
 pub const DEFAULT_AI_DEPTH: u32 = 4;
 
-pub const DEFAULT_VOLUME: u32 = 50; 
+pub const MIN_TILE_SIZE: f32 = 10.0;
+pub const MAX_TILE_SIZE: f32 = 200.0;
+
+pub const TILE_PADDING: f32 = 5.0;
+
 pub const TIME_STEP: f32 = 1.0 / 60.0;
 
 pub const NORMAL_BUTTON: Color = Color::rgb(0.15, 0.15, 0.15);
@@ -31,7 +35,6 @@ pub const SETTINGS_STRING: &str = "Settings";
 pub const QUIT_STRING: &str = "Quit";
 pub const AI_DEPTH_SETTING_STRING: &str = "AI Depth";
 pub const MATRIX_SIZE_SETTING_STRING: &str = "Matrix size";
-pub const VOLUME_SETTING_STRING: &str = "Volume";
 pub const BACK_STRING: &str = "Back";
 
 pub const FONT_LOCATION: &str = "fonts/FiraSans-Bold.ttf";

@@ -1,7 +1,7 @@
 use bevy::{prelude::*, app::AppExit};
 
 use crate::{constants::{self, PRESSED_BUTTON, HOVERED_PRESS_BUTTON, NORMAL_BUTTON, HOVERED_BUTTON, TEXT_COLOR, GAME_STRING_FONT_SIZE},
-GameState, MatrixSize, AiDepth, Volume, despawn_screen};
+GameState, MatrixSize, AiDepth, despawn_screen};
 
 pub struct MenuPlugin;
 
@@ -19,9 +19,6 @@ struct OnMatrixSizeMenuScreen;
 #[derive(Component)]
 struct OnAiDepthMenuScreen;
 
-#[derive(Component)]
-struct OnVolumeMenuScreen;
-
 // Tag component used to mark which setting is currently selected
 #[derive(Component)]
 struct SelectedOption;
@@ -34,7 +31,6 @@ enum MenuButtonAction {
     Settings,
     SettingsMatrixSize,
     SettingsAiDepth,
-    SettingsVolume,
     BackToMainMenu,
     BackToSettings,
     Quit,
@@ -46,13 +42,12 @@ enum MenuState {
     Settings,
     SettingsMatrixSize,
     SettingsAiDepth,
-    SettingsVolume,
     Disabled,
 }
 
 impl Plugin for MenuPlugin {
     fn build(&self, app: &mut App) {
-        app.add_state(MenuState::Disabled)
+        app.add_state(MenuState::Main)
             .add_system_set(SystemSet::on_enter(GameState::Menu).with_system(menu_setup))
             .add_system_set(SystemSet::on_enter(MenuState::Main).with_system(main_menu_setup))
             .add_system_set(SystemSet::on_exit(MenuState::Main)
@@ -78,13 +73,6 @@ impl Plugin for MenuPlugin {
             .add_system_set(SystemSet::on_exit(MenuState::SettingsAiDepth)
                             .with_system(despawn_screen::<OnAiDepthMenuScreen>))
 
-            .add_system_set(SystemSet::on_enter(MenuState::SettingsVolume)
-                            .with_system(settings_menu_volume))
-            .add_system_set(SystemSet::on_update(MenuState::SettingsVolume)
-                            .with_system(setting_button::<Volume>))
-            .add_system_set(SystemSet::on_exit(MenuState::SettingsVolume)
-                            .with_system(despawn_screen::<OnVolumeMenuScreen>))
-
             .add_system_set(
                 SystemSet::on_update(GameState::Menu)
                     .with_system(menu_action)
@@ -94,7 +82,7 @@ impl Plugin for MenuPlugin {
 }
 
 fn menu_setup(mut menu_state: ResMut<State<MenuState>>) {
-    menu_state.push(MenuState::Main).unwrap();
+    let _ = menu_state.set(MenuState::Main);
 }
 
 // Get all the entities in the world that have the Interaction, Color and
@@ -117,7 +105,12 @@ fn button_system(
 }
 
 // This system updates the settings when a new value for a settings is selected,
-// and marks the button as the one currently selected 
+// and marks the button as the one currently selected
+// This is where the global resource is changed 
+// In interaction query the current button that is clicked is retrieved
+// and in selected_query the previous one. The previous one is reverted to 
+// default settings and the new is added the selectedOption component.
+// Afterwards the global resource is modifed;
 fn setting_button<T: Component + PartialEq + Copy> (
     interaction_query: Query<(&Interaction, &T, Entity),
                             (Changed<Interaction>, With<Button>)>,
@@ -162,9 +155,6 @@ fn menu_action(
                 MenuButtonAction::SettingsAiDepth =>  
                     menu_state.set(MenuState::SettingsAiDepth).unwrap(),
                     
-                MenuButtonAction::SettingsVolume =>  
-                    menu_state.set(MenuState::SettingsVolume).unwrap(),
-
                 MenuButtonAction::BackToMainMenu =>  
                     menu_state.set(MenuState::Main).unwrap(),
 
@@ -179,7 +169,7 @@ fn menu_action(
 }
 
 fn get_menu_styles(asset_server: Res<AssetServer>) -> (Handle<Font>, Style, TextStyle) {
-    let font = asset_server.load("fonts/FiraSans-Bold.ttf");
+    let font = asset_server.load(constants::FONT_LOCATION);
     let button_style = Style {
         size: Size::new(Val::Px(constants::BUTTON_WIDTH), Val::Px(constants::BUTTON_HEIGHT)),
         margin: UiRect::all(Val::Px(constants::BUTTON_MARGIN)),
@@ -301,7 +291,6 @@ fn settings_menu_setup(mut commands: Commands, asset_server: Res<AssetServer>) {
         for (action, text) in [
             (MenuButtonAction::SettingsAiDepth, constants::AI_DEPTH_SETTING_STRING),
             (MenuButtonAction::SettingsMatrixSize, constants::MATRIX_SIZE_SETTING_STRING),
-            (MenuButtonAction::SettingsVolume, constants::VOLUME_SETTING_STRING),
             (MenuButtonAction::BackToMainMenu, constants::BACK_STRING),
         ] {
             parent
@@ -322,31 +311,146 @@ fn settings_menu_setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     });
     
 }
-fn settings_menu_matrix_size(mut commands: Commands, asset_server: Res<AssetServer>) {
-    let button_style = Style {
-        size: Size::new(Val::Px(250.0), Val::Px(65.0)),
-        margin: UiRect::all(Val::Px(20.0)),
-        justify_content: JustifyContent::Center,
-        align_items: AlignItems::Center,
+fn settings_menu_matrix_size(
+    mut commands: Commands,
+    asset_server: Res<AssetServer>,
+    matrix_size: Res<MatrixSize>
+    ) {
+    let (_, button_style, button_text_style) = get_menu_styles(asset_server);
+
+    commands.spawn_bundle( NodeBundle {
+        style: Style {
+            margin: UiRect::all(Val::Auto),
+            flex_direction: FlexDirection::ColumnReverse,
+            align_items: AlignItems::Center,
+            justify_content: JustifyContent::Center,
+            ..default()
+        },
+        color: Color::GRAY.into(),
         ..default()
-    };
-}
-fn settings_menu_ai_depth(mut commands: Commands, asset_server: Res<AssetServer>) {
-    let button_style = Style {
-        size: Size::new(Val::Px(250.0), Val::Px(65.0)),
-        margin: UiRect::all(Val::Px(20.0)),
-        justify_content: JustifyContent::Center,
-        align_items: AlignItems::Center,
-        ..default()
-    };
+    })
+    .insert(OnMatrixSizeMenuScreen)
+        .with_children(|parent| {
+            parent.spawn_bundle(NodeBundle {
+                style: Style {
+                    align_items: AlignItems::Center,
+                    ..default()
+                },
+                color: Color::GRAY.into(),
+                ..default()
+            })
+            .with_children(|parent| {
+                parent.spawn_bundle(TextBundle::from_section(
+                        "Matrix Size",
+                        button_text_style.clone(),
+                ));
+                for current_size in 3..9 {
+                    let mut entity = parent.spawn_bundle(ButtonBundle {
+                        style: Style {
+                            size: Size::new(Val::Px(50.0), Val::Px(50.0)),
+                            ..button_style.clone()
+                        },
+                        color: NORMAL_BUTTON.into(),
+                        ..default()
+                    });
+                    entity.insert(MatrixSize(current_size));
+                    entity.with_children(|parent| {
+                        parent
+                            .spawn_bundle(TextBundle::from_section(
+                                    current_size.to_string(),
+                                    button_text_style.clone(),
+                            ));
+                    });
+                    if *matrix_size == MatrixSize(current_size) {
+                        entity.insert(SelectedOption);
+                    }
+                }
+            });
+            parent.spawn_bundle(ButtonBundle {
+                style: button_style,
+                color: NORMAL_BUTTON.into(),
+                ..default()
+            })
+            .insert(MenuButtonAction::BackToSettings)
+            .with_children(|parent| {
+                parent.spawn_bundle(TextBundle::from_section(
+                        constants::BACK_STRING,
+                        button_text_style,
+                ));
+            });
+
+        });
+
 }
 
-fn settings_menu_volume(mut commands: Commands, asset_server: Res<AssetServer>) {
-    let button_style = Style {
-        size: Size::new(Val::Px(250.0), Val::Px(65.0)),
-        margin: UiRect::all(Val::Px(20.0)),
-        justify_content: JustifyContent::Center,
-        align_items: AlignItems::Center,
+fn settings_menu_ai_depth(
+    mut commands: Commands,
+    asset_server: Res<AssetServer>,
+    ai_depth: Res<AiDepth>
+    ) {
+    let (_, button_style, button_text_style) = get_menu_styles(asset_server);
+
+    commands.spawn_bundle( NodeBundle {
+        style: Style {
+            margin: UiRect::all(Val::Auto),
+            flex_direction: FlexDirection::ColumnReverse,
+            align_items: AlignItems::Center,
+            justify_content: JustifyContent::Center,
+            ..default()
+        },
+        color: Color::GRAY.into(),
         ..default()
-    };
+    })
+    .insert(OnAiDepthMenuScreen)
+        .with_children(|parent| {
+            parent.spawn_bundle(NodeBundle {
+                style: Style {
+                    align_items: AlignItems::Center,
+                    ..default()
+                },
+                color: Color::GRAY.into(),
+                ..default()
+            })
+            .with_children(|parent| {
+                parent.spawn_bundle(TextBundle::from_section(
+                        "AI Depth",
+                        button_text_style.clone(),
+                ));
+                for current_depth in 3..9 {
+                    let mut entity = parent.spawn_bundle(ButtonBundle {
+                        style: Style {
+                            size: Size::new(Val::Px(50.0), Val::Px(50.0)),
+                            ..button_style.clone()
+                        },
+                        color: NORMAL_BUTTON.into(),
+                        ..default()
+                    });
+                    entity.insert(AiDepth(current_depth));
+                    entity.with_children(|parent| {
+                        parent
+                            .spawn_bundle(TextBundle::from_section(
+                                    current_depth.to_string(),
+                                    button_text_style.clone(),
+                            ));
+                    });
+                    if *ai_depth == AiDepth(current_depth) {
+                        entity.insert(SelectedOption);
+                    }
+                }
+            });
+            parent.spawn_bundle(ButtonBundle {
+                style: button_style,
+                color: NORMAL_BUTTON.into(),
+                ..default()
+            })
+            .insert(MenuButtonAction::BackToSettings)
+            .with_children(|parent| {
+                parent.spawn_bundle(TextBundle::from_section(
+                        constants::BACK_STRING,
+                        button_text_style,
+                ));
+            });
+
+        });
 }
+
