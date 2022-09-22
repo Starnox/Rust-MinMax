@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use bevy::prelude::*;
+use bevy::{prelude::*, utils::HashMap};
 
 use crate::{menu::MenuPlugin, game::GamePlugin};
 
@@ -19,14 +19,14 @@ pub struct MatrixSize (pub u32);
 #[derive(Debug, Component, PartialEq, Eq, Clone, Copy)]
 pub struct AiDepth (pub u32);
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, Component, PartialEq, Eq, Clone, Copy)]
 pub enum Tile {
     Empty,
     X,
     O,
 }
 
-#[derive(Debug, Component, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, Component, PartialEq, Eq, Clone, Copy, Hash)]
 pub struct Coordinates {
     pub x: u16,
     pub y: u16,
@@ -104,6 +104,7 @@ struct Board {
     tile_map: TileMap,
     tile_size: f32,
     bounds: Bounds2,
+    coord_to_tile: HashMap<Coordinates, Entity>,
 }
 
 impl Board {
@@ -120,10 +121,12 @@ impl Board {
 
         let coordinates = position - self.bounds.position;
         Some(Coordinates {
-            x: (coordinates.x / self.tile_size ) as u16,
-            y: (coordinates.y / self.tile_size ) as u16,
+            x: (coordinates.y / self.tile_size ) as u16,
+            y: (coordinates.x / self.tile_size ) as u16,
         })
-
+    }
+    pub fn get_tile(&self, coordinates: &Coordinates) -> Option<&Entity> {
+        return self.coord_to_tile.get(coordinates);
     }
 }
 

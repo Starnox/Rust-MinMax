@@ -1,4 +1,4 @@
-use bevy::{prelude::*, app::AppExit};
+use bevy::{prelude::*, app::AppExit, utils::HashMap};
 use bevy::math::Vec3Swizzles;
 use crate::{GameState, TileMap, MatrixSize, Tile, constants, Coordinates, Bounds2, Board};
 
@@ -23,7 +23,9 @@ impl Plugin for GamePlugin {
         app.add_state(PlayingState::Init)
             .add_state(WhoseTurn::Noone)
             .add_system_set(SystemSet::on_enter(GameState::Game).with_system(game_setup))
-            .add_system_set(SystemSet::on_update(PlayingState::Playing).with_system(input_handling));
+            .add_system_set(SystemSet::on_update(PlayingState::Playing)
+                            .with_system(input_handling)
+                            .with_system(render_piece));
     }
 }
 
@@ -41,6 +43,8 @@ fn game_setup(mut commands: Commands,
     let _ = whose_turn.set(WhoseTurn::XTurn); 
     // Create an empty TileMap and insert the resource
     let tile_map = TileMap::empty((*size).0);
+
+    let mut coord_to_tile = HashMap::with_capacity((*size).0 as usize * (*size).0 as usize);
 
     let tile_size = constants::LENGTH / (*size).0 as f32;
 
@@ -65,7 +69,11 @@ fn game_setup(mut commands: Commands,
     .with_children(|parent| {
         for (y, line) in tile_map.0.iter().enumerate() {
             for (x, _) in line.iter().enumerate() {
-                parent.spawn_bundle(SpriteBundle {
+                let coordinates: Coordinates = Coordinates {
+                    x: y as u16,
+                    y: x as u16,
+                };
+                let entity = parent.spawn_bundle(SpriteBundle {
                     sprite: Sprite {
                         color: Color::BLACK,
                         custom_size: Some(Vec2::splat(tile_size - constants::TILE_PADDING)),
@@ -79,10 +87,10 @@ fn game_setup(mut commands: Commands,
                     ..default()
                 })
                 .insert(Name::new(format!("Tile ({}, {})", x, y)))
-                .insert(Coordinates {
-                    x: x as u16,
-                    y: y as u16,
-                });
+                .insert(coordinates)
+                .id();
+
+                coord_to_tile.insert(coordinates, entity);
             }
         }
     });
@@ -93,14 +101,17 @@ fn game_setup(mut commands: Commands,
            position: Vec2::new(start_y, start_y),
            size: constants::LENGTH, 
         },
-        tile_size
+        tile_size,
+        coord_to_tile 
     };
     commands.insert_resource(board);
 }
 
 fn input_handling(windows: Res<Windows>,
-                  board: Res<Board>,
-                  buttons: Res<Input<MouseButton>>) {
+                  mut board: ResMut<Board>,
+                  mut whose_turn: ResMut<State<WhoseTurn>>,
+                  buttons: Res<Input<MouseButton>>,
+                  mut commands: Commands) {
     let window = windows.get_primary().unwrap();
     
     if buttons.just_pressed(MouseButton::Left) {
@@ -109,7 +120,78 @@ fn input_handling(windows: Res<Windows>,
 
             if let Some(coordinates) = tile_coordinates {
                 println!("{:?}", coordinates);
+                let selected_tile: &mut Tile = 
+                    &mut board.tile_map.0[coordinates.x as usize][coordinates.y as usize];
+
+                if *selected_tile == Tile::Empty {
+                    match whose_turn.current() {
+                        WhoseTurn::XTurn => {
+                            *selected_tile = Tile::X;
+                            whose_turn.set(WhoseTurn::OTurn).unwrap();
+                            spawn_piece(&mut commands,
+                                        board.coord_to_tile.get(&coordinates),
+                                        &WhoseTurn::XTurn);
+                        }
+                        WhoseTurn::OTurn => {
+                            *selected_tile = Tile::O;
+                            whose_turn.set(WhoseTurn::XTurn).unwrap();
+                            spawn_piece(&mut commands,
+                                        board.coord_to_tile.get(&coordinates),
+                                        &WhoseTurn::OTurn);
+                        }
+                        _ => ()
+                    }
+                }
+                else {
+                    println!("Tile already pressed");
+                }
+
+                // display the board
+                board.tile_map.console_output();
             } 
         }
     }
+}
+
+
+fn spawn_piece (commands: &mut Commands,
+                entity: Option<&Entity>,
+                whose_turn: &WhoseTurn) {
+
+    if let Some(tile) = entity {
+        match *whose_turn {
+            WhoseTurn::XTurn => {
+                commands.entity(*tile).insert(Tile::X);
+            },
+            WhoseTurn::OTurn => {
+                commands.entity(*tile).insert(Tile::O);
+            },
+            _ => ()
+        }
+    }
+}
+
+fn render_piece (mut commands: Commands,
+                 board: Res<Board>,
+                 tile_changed: Query<(&Coordinates, &Transform, &Tile), Added<Tile>>) {
+
+    for (_, pos, tile_type) in tile_changed.iter() {
+        println!("{:?}", pos);
+        commands.spawn_bundle(SpriteBundle {
+            sprite: Sprite {
+                color: match tile_type {
+                    Tile::X => Color::RED,
+                    Tile::O => Color::BLUE,
+                    _ => Color::WHITE
+                },
+                custom_size: Some(Vec2::splat(board.tile_size * 0.5)),
+                ..default()
+            },
+            transform: Transform::from_xyz(pos.translation.x, -pos.translation.y, 3.0),
+            ..default()
+
+            }
+        );
+    }
+
 }
