@@ -1,6 +1,6 @@
 use bevy::{prelude::*, app::AppExit, utils::HashMap};
 use bevy::math::Vec3Swizzles;
-use crate::{GameState, TileMap, MatrixSize, Tile, constants, Coordinates, Bounds2, Board};
+use crate::{GameState, TileMap, MatrixSize, Tile, constants, Coordinates, Bounds2, Board, menu::{get_menu_styles, MenuButtonAction}, despawn_screen};
 
 pub struct GamePlugin;
 
@@ -18,6 +18,9 @@ enum WhoseTurn {
     OTurn,
 }
 
+#[derive(Clone, Eq, PartialEq, Debug, Hash, Component)]
+struct PlayingItem;
+
 impl Plugin for GamePlugin {
     fn build(&self, app: &mut App) {
         app.add_state(PlayingState::Init)
@@ -25,7 +28,10 @@ impl Plugin for GamePlugin {
             .add_system_set(SystemSet::on_enter(GameState::Game).with_system(game_setup))
             .add_system_set(SystemSet::on_update(PlayingState::Playing)
                             .with_system(input_handling)
-                            .with_system(render_piece));
+                            .with_system(render_piece)
+                            .with_system(game_button_action))
+            .add_system_set(SystemSet::on_exit(PlayingState::Playing)
+                            .with_system(despawn_screen::<PlayingItem>));
     }
 }
 
@@ -36,6 +42,7 @@ impl Plugin for GamePlugin {
 fn game_setup(mut commands: Commands,
               mut playing_states: ResMut<State<PlayingState>>,
               mut whose_turn: ResMut<State<WhoseTurn>>,
+              asset_server: Res<AssetServer>,
               size: Res<MatrixSize>) {
 
     // Mark that the following player is the one that plays with X
@@ -54,6 +61,27 @@ fn game_setup(mut commands: Commands,
     let board_position = Vec3::new(0.,0.,0.);
     let board_size = Vec2::new(constants::LENGTH, constants::LENGTH);
 
+
+    // Spawn the Back button
+    let (_, button_style, button_text_style) = get_menu_styles(asset_server);
+    commands.spawn_bundle(ButtonBundle {
+        style: button_style.clone(),
+        color: constants::NORMAL_BUTTON.into(),
+        ..default()
+    })
+    .insert(Name::new("BackButton"))
+    .insert(Transform::from_translation(board_position))
+    .insert(GlobalTransform::default())
+    .insert(MenuButtonAction::BackToMainMenu)
+    .insert(PlayingItem)
+    .with_children(|parent| {
+        parent.spawn_bundle(TextBundle::from_section(
+            constants::BACK_STRING,
+            button_text_style.clone(),
+        ));
+    });
+
+
     commands.spawn_bundle(SpriteBundle {
         sprite: Sprite {
             color: Color::WHITE,
@@ -66,6 +94,7 @@ fn game_setup(mut commands: Commands,
     .insert(Name::new("Board"))
     .insert(Transform::from_translation(board_position))
     .insert(GlobalTransform::default())
+    .insert(PlayingItem)
     .with_children(|parent| {
         for (y, line) in tile_map.0.iter().enumerate() {
             for (x, _) in line.iter().enumerate() {
@@ -88,6 +117,7 @@ fn game_setup(mut commands: Commands,
                 })
                 .insert(Name::new(format!("Tile ({}, {})", x, y)))
                 .insert(coordinates)
+                .insert(PlayingItem)
                 .id();
 
                 coord_to_tile.insert(coordinates, entity);
@@ -154,6 +184,22 @@ fn input_handling(windows: Res<Windows>,
 }
 
 
+fn game_button_action(
+    interaction_query: Query<(&Interaction, &MenuButtonAction),(Changed<Interaction>, With<Button>)>,
+    mut game_state: ResMut<State<GameState>>,
+    mut playing_states: ResMut<State<PlayingState>>
+    )
+{
+    for (interaction, menu_button_action) in interaction_query.iter() {
+        if interaction == &Interaction::Clicked {
+            if let MenuButtonAction::BackToMainMenu = menu_button_action {
+                game_state.set(GameState::Menu).unwrap();
+                playing_states.set(PlayingState::Init).unwrap();
+            }
+        }
+    }   
+}
+
 fn spawn_piece (commands: &mut Commands,
                 entity: Option<&Entity>,
                 whose_turn: &WhoseTurn) {
@@ -191,7 +237,8 @@ fn render_piece (mut commands: Commands,
             ..default()
 
             }
-        );
+        )
+        .insert(PlayingItem);
     }
 
 }

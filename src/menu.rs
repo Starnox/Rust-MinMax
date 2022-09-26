@@ -25,7 +25,7 @@ struct SelectedOption;
 
 // All actions that can be triggered from a button click 
 #[derive(Component)]
-enum MenuButtonAction {
+pub enum MenuButtonAction {
     PlayAi,
     PlayPlayers,
     Settings,
@@ -168,7 +168,7 @@ fn menu_action(
     
 }
 
-fn get_menu_styles(asset_server: Res<AssetServer>) -> (Handle<Font>, Style, TextStyle) {
+pub fn get_menu_styles(asset_server: Res<AssetServer>) -> (Handle<Font>, Style, TextStyle) {
     let font = asset_server.load(constants::FONT_LOCATION);
     let button_style = Style {
         size: Size::new(Val::Px(constants::BUTTON_WIDTH), Val::Px(constants::BUTTON_HEIGHT)),
