@@ -35,10 +35,6 @@ impl Plugin for GamePlugin {
     }
 }
 
-
-//fn adaptive_tile_size (window: Option<Res<WindowDescriptor>>,
-//                       (min, max): (f32, f32),
-//                       size)
 fn game_setup(mut commands: Commands,
               mut playing_states: ResMut<State<PlayingState>>,
               mut whose_turn: ResMut<State<WhoseTurn>>,
